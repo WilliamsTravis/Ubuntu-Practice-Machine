@@ -64,33 +64,36 @@ Created on April 15th 2019
 @author: Travis Williams - Earth Lab of the Universty of Colorado Boulder
          Travis.Williams@colorado.edu
 """
-# Functions and Libraries
+
 import base64
 import copy
+import datetime as dt
+import gc
+import json
+import os
+import psutil
+import tempfile
+import warnings
+
 from collections import OrderedDict
+
 import dash
-from dash.dependencies import Input, Output, State
-from dash.exceptions import PreventUpdate
 import dash_core_components as dcc
 import dash_html_components as html
 import dash_table
-import datetime as dt
-import fiona
-from flask_caching import Cache
-import gc
 import geopandas as gpd
-import json
+import fiona
 import numpy as np
-import os
-from osgeo import gdal, osr
 import pandas as pd
-import psutil
-import tempfile
 import urllib
-import warnings
 import xarray as xr
+
+from dash.dependencies import Input, Output, State
+from dash.exceptions import PreventUpdate
+from flask_caching import Cache
+from osgeo import gdal, osr
 from functions import Admin_Elements, Index_Maps, Location_Builder
-from functions import shapeReproject, unit_map
+from functions import shapeReproject, UNIT_MAP
 
 # What to do with the mean of empty slice warning?
 warnings.filterwarnings("ignore")
@@ -99,6 +102,17 @@ warnings.filterwarnings("ignore")
 data_path = ''
 
 # In[] Default Values
+
+# Get time dimensions from the first data set, assuming netcdfs are uniform
+sample_path = os.path.join(data_path, 'data/droughtindices/netcdfs/spi1.nc')
+with xr.open_dataset(sample_path) as data:
+    min_date = data.time.data[0]
+    max_date = data.time.data[-1]
+    resolution = data.crs.GeoTransform[1]
+max_year = pd.Timestamp(max_date).year
+min_year = pd.Timestamp(min_date).year + 5
+max_month = pd.Timestamp(max_date).month
+
 # For testing
 source_signal = [[[2000, 2017], [1, 12], [5, 6, 7, 8]], 'Viridis', 'no']
 source_choice = 'pdsi'
@@ -110,14 +124,13 @@ source_location = ['grids', '[10, 11, 11, 11, 12, 12, 12, 12]',
 # Initializing Values
 default_function = 'omean'
 default_function_type = 'index'
-default_sample = 'spi1'
 default_1 = 'pdsi'
 default_2 = 'spi1'
-default_date = '2000 - 2019'
+default_date = '1980 - {}'.format(max_year)
 default_basemap = 'dark'
 default_location = ('[["all", "y", "x", "Contiguous United States", 0], ' +
                     '"None"]')
-default_years = [2000, 2019]
+default_years = [1980, max_year]
 default_extent = {'mapbox.center': {'lon': -92, 'lat': 40},
                   'mapbox.zoom': 2.2, 'mapbox.bearing': 0, 'mapbox.pitch': 20}
 
@@ -158,11 +171,12 @@ cache2 = Cache(config={'CACHE_TYPE': 'filesystem',
 cache.init_app(server)
 cache2.init_app(server)
 
+
 # In[] Interface Options
 # Drought Index Options
 indices = [{'label': 'PDSI', 'value': 'pdsi'},
            {'label': 'PDSI-SC', 'value': 'pdsisc'},
-           # {'label': 'Palmer Z Index', 'value': 'pdsiz'},
+           {'label': 'Palmer Z Index', 'value': 'pdsiz'},
            {'label': 'SPI-1', 'value': 'spi1'},
            {'label': 'SPI-2', 'value': 'spi2'},
            {'label': 'SPI-3', 'value': 'spi3'},
@@ -392,17 +406,6 @@ RdWhBu = [[0.00, 'rgb(115,0,0)'], [0.10, 'rgb(230,0,0)'],
           [0.55, 'rgb(255, 255, 255)'], [0.60, 'rgb(143, 238, 252)'],
           [0.70, 'rgb(12,164,235)'], [0.80, 'rgb(0,125,255)'],
           [0.90, 'rgb(10,55,166)'], [1.00, 'rgb(5,16,110)']]
-
-# Get time dimensions from the first data set, assuming netcdfs are uniform
-with xr.open_dataset(
-        os.path.join(data_path,
-             'data/droughtindices/netcdfs/' + default_sample + '.nc')) as data:
-    min_date = data.time.data[0]
-    max_date = data.time.data[-1]
-    resolution = data.crs.GeoTransform[1]
-max_year = pd.Timestamp(max_date).year
-min_year = pd.Timestamp(min_date).year + 5
-max_month = pd.Timestamp(max_date).month
 
 # Get spatial dimensions from the sample data set above
 admin = Admin_Elements(resolution)
@@ -2116,7 +2119,7 @@ for i in range(1, 3):
             if 'p' in function:
                 yaxis = dict(title='Percentiles', range=[0, 100])
             elif 'o' in function:
-                yaxis = dict(range=[dmin, dmax], title=unit_map[choice])
+                yaxis = dict(range=[dmin, dmax], title=UNIT_MAP[choice])
 
                 # Center the color scale
                 xmask = data.mask

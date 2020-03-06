@@ -7,41 +7,41 @@ Created on Tue Jan 22 18:02:17 2019
 @author: User
 """
 
-# In[]: Environment
-# Start by ignoring the yml deprecation warning (annoying)
+import gc
+import json
+import sys
+import os
 import warnings
-warnings.filterwarnings("ignore")
+
+from glob import glob
+from collections import OrderedDict
+
 import datetime as dt
-from dash.exceptions import PreventUpdate
 import dask
 import dask.array as da
-from dateutil.relativedelta import relativedelta
-import gc
-from glob import glob
-import json
-from collections import OrderedDict
-import os
-from osgeo import gdal, ogr, osr
-from matplotlib.animation import FuncAnimation
 import matplotlib.pyplot as plt
-from netCDF4 import Dataset
-from numba import jit
 import numpy as np
 import pandas as pd
-from pyproj import Proj
 import salem
+import xarray as xr
+
+from dateutil.relativedelta import relativedelta
+from dash.exceptions import PreventUpdate
+from netCDF4 import Dataset
+from numba import jit
+from osgeo import gdal, ogr, osr
+from pyproj import Proj
 from scipy.stats import rankdata
 from tqdm import tqdm
-import sys
-import warnings
-import xarray as xr
+
 warnings.filterwarnings("ignore")
 
 # This could be a CLI argument
 data_path = ''
 
+
 # In[]: Variables
-title_map = {'noaa': 'NOAA CPC-Derived Rainfall Index',
+TITLE_MAP = {'noaa': 'NOAA CPC-Derived Rainfall Index',
              'mdn1': 'Mean Temperature Departure  (1981 - 2010) - 1 month',
              'pdsi': 'Palmer Drought Severity Index',
              'scpdsi': 'Self-Calibrated Palmer Drought Severity Index',
@@ -77,11 +77,11 @@ title_map = {'noaa': 'NOAA CPC-Derived Rainfall Index',
              'spei9': 'Standardized Precipitation-Evapotranspiration Index' +
                       ' - 9 month',
              'spei10': 'Standardized Precipitation-Evapotranspiration Index' +
-                      ' - 10 month',
+                       ' - 10 month',
              'spei11': 'Standardized Precipitation-Evapotranspiration Index' +
-                      ' - 11 month',
+                       ' - 11 month',
              'spei12': 'Standardized Precipitation-Evapotranspiration Index' +
-                      ' - 12 month',
+                       ' - 12 month',
              'eddi1': 'Evaporative Demand Drought Index - 1 month',
              'eddi2': 'Evaporative Demand Drought Index - 2 month',
              'eddi3': 'Evaporative Demand Drought Index - 3 month',
@@ -99,17 +99,17 @@ title_map = {'noaa': 'NOAA CPC-Derived Rainfall Index',
              'tmin': 'Average Daily Minimum Temperature (PRISM)',
              'tmax': 'Average Daily Maximum Temperature (PRISM)',
              'tmean': 'Mean Temperature (PRISM)',
-             'tdmean': 'Mean Dew Point Temperature (PRISM)', 
+             'tdmean': 'Mean Dew Point Temperature (PRISM)',
              'ppt': 'Total Precipitation (PRISM)',
-             'vpdmax': 'Maximum Vapor Pressure Deficit (PRISM)' ,
+             'vpdmax': 'Maximum Vapor Pressure Deficit (PRISM)',
              'vpdmin': 'Minimum Vapor Pressure Deficit (PRISM)',
              'vpdmean': 'Mean Vapor Pressure Deficit (PRISM)'}
 
-unit_map = {'noaa': '%',
+UNIT_MAP = {'noaa': '%',
             'mdn1': '°C',
             'pdsi': 'Index',
             'pdsisc': 'Index',
-            'pzi': 'Index',
+            'pdsiz': 'Index',
             'spi1': 'Index',
             'spi2': 'Index',
             'spi3': 'Index',
@@ -153,7 +153,7 @@ unit_map = {'noaa': '%',
             'tmean': '°C',
             'tdmean': '°C',
             'ppt': 'mm',
-            'vpdmax': 'hPa' ,
+            'vpdmax': 'hPa',
             'vpdmin': 'hPa',
             'vpdmean': 'hPa'}
 
@@ -185,7 +185,7 @@ def datePrint(y1, y2, m1, m2, month_filter, monthmarks):
                               monthmarks[m2] + ' ' + str(y2))
         else:
             letters = "".join([monthmarks[m][0] for m in month_filter])
-            date_print =  '{} - {}'.format(y1, y2) + ' ' + letters
+            date_print = '{} - {}'.format(y1, y2) + ' ' + letters
     elif y1 == y2:
         if len(month_filter) == 12:
             if m1 == 1 and m2 == 12:
@@ -195,7 +195,7 @@ def datePrint(y1, y2, m1, m2, month_filter, monthmarks):
                               monthmarks[m2] + ' ' + str(y2))
         else:
             letters = "".join([monthmarks[m][0] for m in month_filter])
-            date_print =  '{}'.format(y1) + ' ' + letters
+            date_print = '{}'.format(y1) + ' ' + letters
     return date_print
 
 
@@ -213,66 +213,6 @@ def isInt(string):
         return True
     except:
         return False
-
-
-def movie(array, titles=None, axis=0, na=-9999):
-    '''
-    This takes a three dimensional numpy array and animates it. If the time
-    axis is not 0, specify which it is. Just a heads up, some functions
-    organize along different axes; consider np.dstack vs np.array.
-    '''
-    if 'netCDF' in str(type(array)):
-        if titles is None:
-            titles = array.variables['time']
-        key = list(array.variables.keys())[3]  # I am guessing it's always 3
-        array = array.variables[key][:]
-        if na in array:
-            array[array==na] = np.nan
-    elif 'xarray' in str(type(array)):
-        if titles is None:
-            titles = array.time
-        array = array.value
-        if na in array:
-            array.data[array.data==na] = np.nan
-    else:
-        if titles is None:
-            titles = ["" for t in range(len(array))]
-        elif type(titles) is str:
-            titles = [titles + ': ' + str(t) for t in range(len(array))]
-        if na in array:
-            array[array==na] = np.nan
-
-
-    fig, ax = plt.subplots()
-
-    ax.set_ylim((array.shape[1], 0))
-    ax.set_xlim((0, array.shape[2]))
-
-    im = ax.imshow(array[0, :, :], cmap='viridis_r')
-
-    def init():
-        if axis == 0:
-            im.set_data(array[0, :, :])
-        elif axis == 1:
-            im.set_data(array[:, 0, :])
-        else:
-            im.set_data(array[:, :, 0])
-        return im,
-
-    def animate(i):
-        if axis == 0:
-            data_slice = array[i, :, :]
-        elif axis == 1:
-            data_slice = array[:, i, :]
-        else:
-            data_slice = array[:, :, i]
-        im.set_data(data_slice)
-        ax.set_title(titles[i])
-        return im,
-
-    anim = FuncAnimation(fig, animate, init_func=init, blit=False, repeat=True)
-
-    return anim
 
 
 # For making outlines...move to css, maybe
@@ -321,14 +261,14 @@ def readRaster(rasterpath, band, navalue=-9999):
     array = array.astype(float)
     if np.nanmin(array) < navalue:
         navalue = np.nanmin(array)
-    array[array==navalue] = np.nan
+    array[array == navalue] = np.nan
     return(array, geometry, arrayref)
 
 
 def readRasters(files, navalue=-9999):
     """
     files = list of files to read in
-    navalue = a number (float) for nan values if we forgot 
+    navalue = a number (float) for nan values if we forgot
                 to translate the file with one originally
 
     This converts monthly rasters into numpy arrays and them as a list in another
@@ -347,14 +287,14 @@ def readRasters(files, navalue=-9999):
     geometry = sample.GetGeoTransform()
     arrayref = sample.GetProjection()
     alist = []
-    for i in tqdm(range(0,len(files))):
+    for i in tqdm(range(0, len(files))):
         rast = gdal.Open(files[i])
         array = np.array(rast.GetRasterBand(1).ReadAsArray())
         array = array.astype(float)
         array[array == navalue] = np.nan
         name = str.upper(names[i][:-4])
-        alist.append([name,array])
-    return(alist,geometry,arrayref)
+        alist.append([name, array])
+    return(alist, geometry, arrayref)
 
 
 def shapeReproject(src, dst, src_epsg, dst_epsg):
@@ -451,7 +391,7 @@ def standardize(indexlist):
     '''
     def single(array, mins, maxes):
         newarray = (array - mins)/(maxes - mins)
-        return(newarray)
+        return newarray
 
     if type(indexlist[0][0]) == str:
         arrays = [a[1] for a in indexlist]
@@ -467,7 +407,7 @@ def standardize(indexlist):
         maxes = np.nanmax(indexlist)
         standardizedlist = [single(indexlist[i],
                                    mins, maxes) for i in range(len(indexlist))]
-    return(standardizedlist)
+    return standardizedlist
 
 
 def toNetCDFSingle(file, ncfile, savepath, index, epsg=4326, wmode='w'):
@@ -490,7 +430,7 @@ def toNetCDFSingle(file, ncfile, savepath, index, epsg=4326, wmode='w'):
     geom = data.GetGeoTransform()
     proj = data.GetProjection()
     array = data.ReadAsArray()
-    array[array==-9999.] = np.nan
+    array[array == -9999.] = np.nan
     nlat, nlon = np.shape(array)
     lons = np.arange(nlon) * geom[1] + geom[0]
     lats = np.arange(nlat) * geom[5] + geom[3]
@@ -502,9 +442,9 @@ def toNetCDFSingle(file, ncfile, savepath, index, epsg=4326, wmode='w'):
     nco.createDimension('time', None)
 
     # Variables
-    latitudes = nco.createVariable('lat',  'f4', ('lat',))
-    longitudes = nco.createVariable('lon',  'f4', ('lon',))
-    times = nco.createVariable('time', 'f8', ('time',))
+    latitudes = nco.createVariable('lat', 'f4', ('lat', ))
+    longitudes = nco.createVariable('lon', 'f4', ('lon', ))
+    times = nco.createVariable('time', 'f8', ('time', ))
     variable = nco.createVariable('value', 'f4', ('time', 'lat', 'lon'),
                                   fill_value=-9999)
     variable.standard_name = 'index'
@@ -529,7 +469,7 @@ def toNetCDFSingle(file, ncfile, savepath, index, epsg=4326, wmode='w'):
 
     # Attributes
     # Global Attrs
-    nco.title = title_map[index]
+    nco.title = TITLE_MAP[index]
     nco.subtitle = "Monthly Index values since 1948-01-01"
     nco.description = ('Monthly gridded data at 0.25 decimal degree' +
                        ' (15 arc-minute resolution, calibrated to 1895-2010 ' +
@@ -620,9 +560,9 @@ def toNetCDF(tfiles, ncfiles, savepath, index, year1, month1, year2, month2,
     nco.createDimension('time', None)
 
     # Variables
-    latitudes = nco.createVariable('lat',  'f4', ('lat',))
-    longitudes = nco.createVariable('lon',  'f4', ('lon',))
-    times = nco.createVariable('time', 'f8', ('time',))
+    latitudes = nco.createVariable('lat', 'f4', ('lat', ))
+    longitudes = nco.createVariable('lon', 'f4', ('lon', ))
+    times = nco.createVariable('time', 'f8', ('time', ))
     variable = nco.createVariable('value', 'f4', ('time', 'lat', 'lon'),
                                   fill_value=-9999)
     variable.standard_name = 'index'
@@ -645,7 +585,7 @@ def toNetCDF(tfiles, ncfiles, savepath, index, year1, month1, year2, month2,
 
     # Attributes
     # Global Attrs
-    nco.title = title_map[index]
+    nco.title = TITLE_MAP[index]
     nco.subtitle = "Monthly Index values since 1895-01-01"
     nco.description = ('Monthly gridded data at '+ str(res) +
                        ' decimal degree (15 arc-minute resolution, ' +
@@ -696,7 +636,7 @@ def toNetCDF(tfiles, ncfiles, savepath, index, year1, month1, year2, month2,
         # print('Combining data using filename dates...')
         datestrings = [f[-10:-4] for f in tfiles if isInt(f[-10:-4])]
         dates = [dt.datetime(year=int(d[:4]), month=int(d[4:]), day=15) for
-                  d in datestrings]
+                 d in datestrings]
         deltas = [d - dt.datetime(1900, 1, 1) for d in dates]
         days = np.array([d.days for d in deltas])
         arrays = []
@@ -721,7 +661,7 @@ def toNetCDF(tfiles, ncfiles, savepath, index, year1, month1, year2, month2,
 
     # This allows the option to store the data as percentiles
     if percentiles:
-        arrays[arrays==-9999] = np.nan
+        arrays[arrays == -9999] = np.nan
         arrays = percentileArrays(arrays)
 
     # Write - set this to write one or multiple
@@ -784,9 +724,9 @@ def toNetCDFAlbers(tfiles, ncfiles, savepath, index, year1, month1,
     nco.createDimension('time', None)
 
     # Variables
-    latitudes = nco.createVariable('lat',  'f4', ('lat',))
-    longitudes = nco.createVariable('lon',  'f4', ('lon',))
-    times = nco.createVariable('time', 'f8', ('time',))
+    latitudes = nco.createVariable('lat', 'f4', ('lat', ))
+    longitudes = nco.createVariable('lon', 'f4', ('lon', ))
+    times = nco.createVariable('time', 'f8', ('time', ))
     variable = nco.createVariable('value', 'f4', ('time', 'lat', 'lon'),
                                   fill_value=-9999)
     variable.standard_name = 'index'
@@ -808,7 +748,7 @@ def toNetCDFAlbers(tfiles, ncfiles, savepath, index, year1, month1,
 
     # Attributes
     # Global Attrs
-    nco.title = title_map[index]
+    nco.title = TITLE_MAP[index]
     nco.subtitle = "Monthly Index values since 1895-01-01"
     nco.description = ('Monthly gridded data at '+ str(res) +
                        ' decimal degree (15 arc-minute resolution, ' +
@@ -858,7 +798,7 @@ def toNetCDFAlbers(tfiles, ncfiles, savepath, index, year1, month1,
         tfiles.sort()
         datestrings = [f[-10:-4] for f in tfiles if isInt(f[-10:-4])]
         dates = [dt.datetime(year=int(d[:4]), month=int(d[4:]), day=15) for
-                  d in datestrings]
+                 d in datestrings]
         deltas = [d - dt.datetime(1900, 1, 1) for d in dates]
         days = np.array([d.days for d in deltas])
         arrays = []
@@ -883,7 +823,7 @@ def toNetCDFAlbers(tfiles, ncfiles, savepath, index, year1, month1,
 
     # This allows the option to store the data as percentiles
     if percentiles:
-        arrays[arrays==-9999] = np.nan
+        arrays[arrays == -9999] = np.nan
         arrays = percentileArrays(arrays)
 
     # Write - set this to write one or multiple
@@ -957,7 +897,7 @@ def toNetCDF3(tfile, ncfile, savepath, index, epsg=102008, percentiles=False,
 
     # Attributes
     # Global Attrs
-    nco.title = title_map[index]
+    nco.title = TITLE_MAP[index]
     nco.subtitle = "Monthly Index values since 1895-01-01"
     nco.description = ('Monthly gridded data at 0.25 decimal degree' +
                        ' (15 arc-minute resolution, calibrated to 1895-2010 ' +
@@ -1022,8 +962,8 @@ def toNetCDFPercentile(src_path, dst_path):
             dst.setncattr(name, src.getncattr(name))
 
         # Some attributes need to change
-        dst.setncattr('subtitle', 'Monthly percentile values ' +
-                                  'since 1895')
+        dst.setncattr('subtitle',
+                      'Monthly percentile values since 1895')
         dst.setncattr('standard_name', 'percentile')
 
         # set dimensions
@@ -1034,9 +974,9 @@ def toNetCDFPercentile(src_path, dst_path):
         dst.createDimension('time', None)
 
         # set variables
-        latitudes = dst.createVariable('lat',  'f4', ('lat',))
-        longitudes = dst.createVariable('lon',  'f4', ('lon',))
-        times = dst.createVariable('time', 'f8', ('time',))
+        latitudes = dst.createVariable('lat', 'f4', ('lat', ))
+        longitudes = dst.createVariable('lon', 'f4', ('lon', ))
+        times = dst.createVariable('time', 'f8', ('time', ))
         variable = dst.createVariable('value', 'f4',
                                       ('time', 'lat', 'lon'),
                                       fill_value=-9999)
@@ -1059,8 +999,8 @@ def toNetCDFPercentile(src_path, dst_path):
 
         # Set most values
         latitudes[:] = src.variables['lat'][:]
-        longitudes[:] =  src.variables['lon'][:]
-        times[:] =  src.variables['time'][:]
+        longitudes[:] = src.variables['lon'][:]
+        times[:] = src.variables['time'][:]
 
         # finally rank and transform values into percentiles
         values = src.variables['value'][:]
@@ -1079,8 +1019,8 @@ def toRaster(array, path, geometry, srs, navalue=-9999):
     xpixels = array.shape[1]
     ypixels = array.shape[0]
     path = path.encode('utf-8')
-    image = gdal.GetDriverByName("GTiff").Create(path, xpixels, ypixels,
-                                1, gdal.GDT_Float32)
+    image = gdal.GetDriverByName("GTiff").Create(path, xpixels, ypixels, 1,
+                                                 gdal.GDT_Float32)
     image.SetGeoTransform(geometry)
     image.SetProjection(srs)
     image.GetRasterBand(1).WriteArray(array)
@@ -1104,9 +1044,9 @@ def toRasters(arraylist, path, geometry, srs):
     ypixels = sample.shape[0]
     xpixels = sample.shape[1]
     for ray in  tqdm(arraylist):
-        image = gdal.GetDriverByName("GTiff").Create(os.path.join(path,
-                                                              ray[0] + ".tif"),
-                                    xpixels, ypixels, 1, gdal.GDT_Float32)
+        path = os.path.join(path, ray[0] + ".tif")
+        image = gdal.GetDriverByName("GTiff").Create(path, xpixels, ypixels,
+                                                     1, gdal.GDT_Float32)
         image.SetGeoTransform(geometry)
         image.SetProjection(srs)
         image.GetRasterBand(1).WriteArray(ray[1])
@@ -1166,11 +1106,11 @@ def wgsToAlbers(arrays, crdict, proj_sample):
 
     # Create mask xarray
     proj_mask = xr.DataArray(proj_mask,
-                              coords={'lat': ys.astype(np.float32),
-                                      'lon': xs.astype(np.float32)},
-                              dims={'lat': len(ys),
-                                    'lon': len(xs)})
-    return(proj_mask)
+                             coords={'lat': ys.astype(np.float32),
+                                     'lon': xs.astype(np.float32)},
+                             dims={'lat': len(ys),
+                                   'lon': len(xs)})
+    return proj_mask
 
 
 # In[]:Classes
@@ -1248,7 +1188,7 @@ class Admin_Elements:
         df = df[['County Name', 'STATE_NAME', 'place', 'grid', 'gradient',
                  'county_fips', 'state_fips', 'fips', 'STUSAB']]
         df.columns = ['county', 'state', 'place', 'grid', 'gradient',
-                      'county_fips','state_fips', 'fips', 'state_abbr']
+                      'county_fips', 'state_fips', 'fips', 'state_abbr']
 
         df.to_csv(admin_path, index=False)
 
@@ -1356,9 +1296,9 @@ class Admin_Elements:
 
         # Read in/create objects
         states = gdal.Open(state_path).ReadAsArray()
-        states[states==-9999] = np.nan
+        states[states == -9999] = np.nan
         cnty = gdal.Open(county_path).ReadAsArray()
-        cnty[cnty==-9999] = np.nan
+        cnty[cnty == -9999] = np.nan
         grid = gdal.Open(grid_path).ReadAsArray()
         grid[grid == -9999] = np.nan
         mask = grid * 0 + 1
@@ -1435,7 +1375,7 @@ class Admin_Elements:
         cols = int((xmax - xmin)/resolution)
         rows = int((ymax - ymin)/resolution)
         trgt = gdal.GetDriverByName('GTiff').Create(dst, cols, rows, 1,
-                                   gdal.GDT_Float32)
+                                                    gdal.GDT_Float32)
         trgt.SetGeoTransform((xmin, resolution, 0, ymax, 0, -resolution))
 
         # Add crs
@@ -1466,8 +1406,8 @@ class Cacher:
     A simple stand in cache for storing objects in memory.
     '''
     def __init__(self, key):
-        self.cache={}
-        self.key=key
+        self.cache = {}
+        self.key = key
     def memoize(self, function):
         def cacher(*args):
             arg = [a for a in args]
@@ -1642,7 +1582,7 @@ class Index_Maps():
         self.dataset_interval = data
 
         # I am also setting index ranges from the full data sets
-        if self.choice_type =='percentile':
+        if self.choice_type == 'percentile':
             self.data_min = 0
             self.data_max = 100
         else:
@@ -1651,7 +1591,7 @@ class Index_Maps():
             maximum = ranges['max'][ranges['index'] == self.choice].values[0]
 
             # For index values we want them to be centered on zero
-            nonindices = ['tdmean', 'tmean', 'tmin', 'tmax', 'ppt',  'vpdmax',
+            nonindices = ['tdmean', 'tmean', 'tmin', 'tmax', 'ppt', 'vpdmax',
                           'vpdmin', 'vpdmean']
             if self.choice not in nonindices:
                 limits = [abs(minimum), abs(maximum)]
@@ -1673,7 +1613,7 @@ class Index_Maps():
                    'Electric': 'Electric', 'Greens': 'Greens',
                    'Greys': 'Greys', 'Hot': 'Hot', 'Jet': 'Jet',
                    'Picnic': 'Picnic', 'Portland': 'Portland',
-                   'Rainbow': 'Rainbow', 'RdBu': 'RdBu',  'Viridis': 'Viridis',
+                   'Rainbow': 'Rainbow', 'RdBu': 'RdBu', 'Viridis': 'Viridis',
                    'Reds': 'Reds',
                    'RdWhBu': [[0.00, 'rgb(115,0,0)'],
                               [0.10, 'rgb(230,0,0)'],
@@ -1700,10 +1640,10 @@ class Index_Maps():
                                                [0.98, 'rgb(10,55,166)'],
                                                [1.00, 'rgb(5,16,110)']],
                    'RdYlGnBu':  [[0.00, 'rgb(124, 36, 36)'],
-                                  [0.25, 'rgb(255, 255, 48)'],
-                                  [0.5, 'rgb(76, 145, 33)'],
-                                  [0.85, 'rgb(0, 92, 221)'],
-                                   [1.00, 'rgb(0, 46, 110)']],
+                                 [0.25, 'rgb(255, 255, 48)'],
+                                 [0.5, 'rgb(76, 145, 33)'],
+                                 [0.85, 'rgb(0, 92, 221)'],
+                                 [1.00, 'rgb(0, 46, 110)']],
                    'BrGn':  [[0.00, 'rgb(91, 74, 35)'],
                              [0.10, 'rgb(122, 99, 47)'],
                              [0.15, 'rgb(155, 129, 69)'],
@@ -1749,7 +1689,7 @@ class Index_Maps():
                       'projected': 'data/droughtindices/netcdfs/albers'}
 
         # Build path and retrieve the data set
-        netcdf_path =  type_paths[self.choice_type]
+        netcdf_path = type_paths[self.choice_type]
         file_path = os.path.join(data_path, netcdf_path, self.choice + '.nc')
         if self.chunk:
             dataset = xr.open_dataset(file_path, chunks=100)  # <------------------ Best chunk size/shape?
@@ -1942,18 +1882,19 @@ class Index_Maps():
             '''
             totals = arrays.where(~np.isnan(arrays)).count(dim=('lat', 'lon'))
             if inclusive:
-                counts = arrays.where(arrays<d[0]).count(dim=('lat', 'lon'))
+                counts = arrays.where(arrays < d[0]).count(dim=('lat', 'lon'))
             else:
-                counts = arrays.where((arrays<d[0]) &
-                                      (arrays>=d[1])).count(dim=('lat', 'lon'))
+                counts = arrays.where((arrays < d[0]) &
+                                      (arrays >= d[1])).count(
+                                          dim=('lat', 'lon'))
             ratios = counts / totals
             pcts = ratios.compute().data * 100
             return pcts
 
         # Calculate non-inclusive percentages # <------------------------------ parallelizing with delayed speeds it up but takes just a bit too much memory for the virtual machine to handle the full time series
-#        pnincs = [dask.delayed(catFilter)(arrays, cats[i]) for i in range(5)]
-#        pnincs = np.array(dask.compute(*pnincs))
-        pnincs =  np.array([catFilter(arrays, cats[i]) for i in range(5)])
+        pnincs = [dask.delayed(catFilter)(arrays, cats[i]) for i in range(5)]
+        pnincs = np.array(dask.compute(*pnincs))
+        # pnincs =  np.array([catFilter(arrays, cats[i]) for i in range(5)])
 
         # Use the noninclusive percentages to create the inclusive percentages
         pincs = [np.sum(pnincs[i:], axis=0) for i in range(len(pnincs))]
@@ -2034,7 +1975,7 @@ class Location_Builder:
         if 'county' in trig_id:
             county = admin_df['place'][admin_df.fips == trig_val].unique()[0]
             y, x = np.where(county_array == trig_val)
-            # crds = 
+            # crds =
             location = ['county', str(list(y)), str(list(x)), county]
 
         # 2: Selection is a single grid IDs
@@ -2061,8 +2002,8 @@ class Location_Builder:
                 x = list([cd.londict[d['lon']] for d in selections])
                 counties = np.array([d['text'][:d['text'].index('<')] for
                                      d in selections])
-                local_df = admin_df[admin_df['place'].isin(
-                                    list(np.unique(counties)))]
+                cnty_lst = list(np.unique(counties))
+                local_df = admin_df[admin_df['place'].isin(cnty_lst)]
 
                 # Use gradient to print NW and SE most counties as a range
                 NW = local_df['place'][
@@ -2078,25 +2019,25 @@ class Location_Builder:
         elif 'update' in trig_id:
             # Selection is the default 'all'
             if type(trig_val) is str:
-                location = ['all',  'y', 'x', 'Contiguous United States']
+                location = ['all', 'y', 'x', 'Contiguous United States']
 
             # Empty list, default to CONUS
             elif len(trig_val) == 0:
-                location = ['all',  'y', 'x', 'Contiguous United States']
+                location = ['all', 'y', 'x', 'Contiguous United States']
 
             # A selection of 'all' within a list
             elif len(trig_val) == 1 and trig_val[0] == 'all':
-                location = ['all',  'y', 'x', 'Contiguous United States']
+                location = ['all', 'y', 'x', 'Contiguous United States']
 
             # Single or multiple, not 'all' or empty, state or list of states
             elif len(trig_val) >= 1:
                 # Return the mask, a flag, and the state names
                 state = list(states_df['state_abbr'][
-                             states_df['state_fips'].isin(trig_val)])
+                    states_df['state_fips'].isin(trig_val)])
 
                 if len(state) < 4:  # Spell out full state name in title
                     state = [states_df['state'][
-                             states_df['state_abbr']==s].item() for s in state]
+                        states_df['state_abbr'] == s].item() for s in state]
                 states = ", ".join(state)
                 y, x = np.where(np.isin(state_array, trig_val))
 
@@ -2108,9 +2049,9 @@ class Location_Builder:
             # We don't have the x,y values just yet
             try:
                 shp = gdal.Open('data/shapefiles/temp/temp.tif').ReadAsArray()
-                shp[shp==-9999] = np.nan
+                shp[shp == -9999] = np.nan
                 y, x = np.where(~np.isnan(shp))
-                # crds = 
+                # crds =
                 location = ['shape', str(list(y)), str(list(x)), trig_val]
             except:
                 location = ['all', 'y', 'x', 'Contiguous United States']
