@@ -72,6 +72,7 @@ import gc
 import json
 import os
 import psutil
+import sys
 import tempfile
 import warnings
 
@@ -92,30 +93,39 @@ from dash.dependencies import Input, Output, State
 from dash.exceptions import PreventUpdate
 from flask_caching import Cache
 from osgeo import gdal, osr
-from functions import Admin_Elements, Index_Maps, Location_Builder
-from functions import shapeReproject, UNIT_MAP
+
+from drip import Admin_Elements, Index_Maps, Location_Builder
+from drip.data import Data_Path, shapeReproject
+from drip.constants import ACRONYM_TEXT, TITLE_MAP, INDICES, NONINDICES
+from drip.constants import PROJECT_DIR, UNIT_MAP
 
 # What to do with the mean of empty slice warning?
 warnings.filterwarnings("ignore")
 
-# In case the data needs to be stored elsewhere
-data_path = ''
+
+# Get resolution from file call
+RES = 0.25
+RES_STRING = str(RES).replace(".", "_")
+
+# Data and Index Paths
+DP = Data_Path(PROJECT_DIR, "data")
+IP = Data_Path(PROJECT_DIR,  "data", "droughtindices", RES_STRING)
 
 # In[] Default Values
 
 # Get time dimensions from the first data set, assuming netcdfs are uniform
-sample_path = os.path.join(data_path, 'data/droughtindices/netcdfs/spi1.nc')
+sample_path = IP.join("netcdfs", "spi1.nc")
+
 with xr.open_dataset(sample_path) as data:
     min_date = data.time.data[0]
     max_date = data.time.data[-1]
-    resolution = data.crs.GeoTransform[1]
 max_year = pd.Timestamp(max_date).year
-min_year = pd.Timestamp(min_date).year + 5
+min_year = pd.Timestamp(min_date).year
 max_month = pd.Timestamp(max_date).month
 
 # For testing
 source_signal = [[[2000, 2017], [1, 12], [5, 6, 7, 8]], 'Viridis', 'no']
-source_choice = 'pdsi'
+source_choice = 'spi6'
 source_function = 'pmean'
 source_location = ['grids', '[10, 11, 11, 11, 12, 12, 12, 12]',
                    '[243, 242, 243, 244, 241, 242, 243, 244]',
@@ -124,7 +134,7 @@ source_location = ['grids', '[10, 11, 11, 11, 12, 12, 12, 12]',
 # Initializing Values
 default_function = 'omean'
 default_function_type = 'index'
-default_1 = 'pdsi'
+default_1 = 'spei6'
 default_2 = 'spi1'
 default_date = '1980 - {}'.format(max_year)
 default_basemap = 'dark'
@@ -144,7 +154,7 @@ default_clicks = [list(np.repeat(default_click.copy(), 4)), 0]
 default_clicks = json.dumps(default_clicks)
 
 # For scaling
-ranges = pd.read_csv('data/tables/index_ranges.csv')
+ranges = pd.read_csv(DP.join("tables/index_ranges.csv"))
 
 # In[] The DASH application and server
 app = dash.Dash(__name__)
@@ -161,134 +171,18 @@ app.config['suppress_callback_exceptions'] = True
 
 # Create a simple file storeage cache, holds unique outputs of Index_Maps
 cache = Cache(config={'CACHE_TYPE': 'filesystem',
-                      'CACHE_DIR': 'data/cache',
+                      'CACHE_DIR': DP.join("cache"),
                       'CACHE_THRESHOLD': 2})
 
 # Create a separate cache to hold drought area data for toggling DSCI on/off
 cache2 = Cache(config={'CACHE_TYPE': 'filesystem',
-                       'CACHE_DIR': 'data/cache2',
+                       'CACHE_DIR': DP.join("cache2"),
                        'CACHE_THRESHOLD': 2})
 cache.init_app(server)
 cache2.init_app(server)
 
 
 # In[] Interface Options
-# Drought Index Options
-indices = [{'label': 'PDSI', 'value': 'pdsi'},
-           {'label': 'PDSI-SC', 'value': 'pdsisc'},
-           {'label': 'Palmer Z Index', 'value': 'pdsiz'},
-           {'label': 'SPI-1', 'value': 'spi1'},
-           {'label': 'SPI-2', 'value': 'spi2'},
-           {'label': 'SPI-3', 'value': 'spi3'},
-           {'label': 'SPI-4', 'value': 'spi4'},
-           {'label': 'SPI-5', 'value': 'spi5'},
-           {'label': 'SPI-6', 'value': 'spi6'},
-           {'label': 'SPI-7', 'value': 'spi7'},
-           {'label': 'SPI-8', 'value': 'spi8'},
-           {'label': 'SPI-9', 'value': 'spi9'},
-           {'label': 'SPI-10', 'value': 'spi10'},
-           {'label': 'SPI-11', 'value': 'spi11'},
-           {'label': 'SPI-12', 'value': 'spi12'},
-           {'label': 'SPEI-1', 'value': 'spei1'},
-           {'label': 'SPEI-2', 'value': 'spei2'},
-           {'label': 'SPEI-3', 'value': 'spei3'},
-           {'label': 'SPEI-4', 'value': 'spei4'},
-           {'label': 'SPEI-5', 'value': 'spei5'},
-           {'label': 'SPEI-6', 'value': 'spei6'},
-           {'label': 'SPEI-7', 'value': 'spei7'},
-           {'label': 'SPEI-8', 'value': 'spei8'},
-           {'label': 'SPEI-9', 'value': 'spei9'},
-           {'label': 'SPEI-10', 'value': 'spei10'},
-           {'label': 'SPEI-11', 'value': 'spei11'},
-           {'label': 'SPEI-12', 'value': 'spei12'},
-           {'label': 'EDDI-1', 'value': 'eddi1'},
-           {'label': 'EDDI-2', 'value': 'eddi2'},
-           {'label': 'EDDI-3', 'value': 'eddi3'},
-           {'label': 'EDDI-4', 'value': 'eddi4'},
-           {'label': 'EDDI-5', 'value': 'eddi5'},
-           {'label': 'EDDI-6', 'value': 'eddi6'},
-           {'label': 'EDDI-7', 'value': 'eddi7'},
-           {'label': 'EDDI-8', 'value': 'eddi8'},
-           {'label': 'EDDI-9', 'value': 'eddi9'},
-           {'label': 'EDDI-10', 'value': 'eddi10'},
-           {'label': 'EDDI-11', 'value': 'eddi11'},
-           {'label': 'EDDI-12', 'value': 'eddi12'},
-           # {'label': 'LERI-1', 'value': 'leri1'},
-           # {'label': 'LERI-3', 'value': 'leri3'},
-           {'label': 'TMIN', 'value': 'tmin'},
-           {'label': 'TMAX', 'value': 'tmax'},
-           {'label': 'TMEAN', 'value': 'tmean'},
-           {'label': 'TDMEAN', 'value': 'tdmean'},
-           {'label': 'PPT', 'value': 'ppt'},
-           {'label': 'VPDMAX', 'value': 'vpdmax'},
-           {'label': 'VPDMIN', 'value': 'vpdmin'}
-           # {'label': 'VPDMEAN', 'value': 'vpdmean'}
-           ]
-
-# Index dropdown labels
-indexnames = {'noaa': 'NOAA CPC-Derived Rainfall Index',
-              'mdn1': 'Mean Temperature Departure  (1981 - 2010) - 1 month',
-              'pdsi': 'Palmer Drought Severity Index',
-              'pdsisc': 'Self-Calibrated Palmer Drought Severity Index',
-              'pdsiz': 'Palmer Z-Index',
-              'spi1': 'Standardized Precipitation Index - 1 month',
-              'spi2': 'Standardized Precipitation Index - 2 month',
-              'spi3': 'Standardized Precipitation Index - 3 month',
-              'spi4': 'Standardized Precipitation Index - 4 month',
-              'spi5': 'Standardized Precipitation Index - 5 month',
-              'spi6': 'Standardized Precipitation Index - 6 month',
-              'spi7': 'Standardized Precipitation Index - 7 month',
-              'spi8': 'Standardized Precipitation Index - 8 month',
-              'spi9': 'Standardized Precipitation Index - 9 month',
-              'spi10': 'Standardized Precipitation Index - 10 month',
-              'spi11': 'Standardized Precipitation Index - 11 month',
-              'spi12': 'Standardized Precipitation Index - 12 month',
-              'spei1': 'Standardized Precipitation-Evapotranspiration Index' +
-                       ' - 1 month',
-              'spei2': 'Standardized Precipitation-Evapotranspiration Index' +
-                       ' - 2 month',
-              'spei3': 'Standardized Precipitation-Evapotranspiration Index' +
-                       ' - 3 month',
-              'spei4': 'Standardized Precipitation-Evapotranspiration Index' +
-                       ' - 4 month',
-              'spei5': 'Standardized Precipitation-Evapotranspiration Index' +
-                       ' - 5 month',
-              'spei6': 'Standardized Precipitation-Evapotranspiration Index' +
-                       ' - 6 month',
-              'spei7': 'Standardized Precipitation-Evapotranspiration Index' +
-                       ' - 7 month',
-              'spei8': 'Standardized Precipitation-Evapotranspiration Index' +
-                       ' - 8 month',
-              'spei9': 'Standardized Precipitation-Evapotranspiration Index' +
-                       ' - 9 month',
-              'spei10': 'Standardized Precipitation-Evapotranspiration Index' +
-                       ' - 10 month',
-              'spei11': 'Standardized Precipitation-Evapotranspiration Index' +
-                       ' - 11 month',
-              'spei12': 'Standardized Precipitation-Evapotranspiration Index' +
-                       ' - 12 month',
-              'eddi1': 'Evaporative Demand Drought Index - 1 month',
-              'eddi2': 'Evaporative Demand Drought Index - 2 month',
-              'eddi3': 'Evaporative Demand Drought Index - 3 month',
-              'eddi4': 'Evaporative Demand Drought Index - 4 month',
-              'eddi5': 'Evaporative Demand Drought Index - 5 month',
-              'eddi6': 'Evaporative Demand Drought Index - 6 month',
-              'eddi7': 'Evaporative Demand Drought Index - 7 month',
-              'eddi8': 'Evaporative Demand Drought Index - 8 month',
-              'eddi9': 'Evaporative Demand Drought Index - 9 month',
-              'eddi10': 'Evaporative Demand Drought Index - 10 month',
-              'eddi11': 'Evaporative Demand Drought Index - 11 month',
-              'eddi12': 'Evaporative Demand Drought Index - 12 month',
-              'leri1': 'Landscape Evaporative Response Index - 1 month',
-              'leri3': 'Landscape Evaporative Response Index - 3 month',
-              'tmin': 'Average Daily Minimum Temperature (°C)',
-              'tmax': 'Average Daily Maximum Temperature (°C)',
-              'tmean': 'Mean Temperature (°C)',
-              'tdmean': 'Mean Dew Point Temperature (°C)',
-              'ppt': 'Average Precipitation (mm)',
-              'vpdmax': 'Maximum Vapor Pressure Deficit (hPa)' ,
-              'vpdmin': 'Minimum Vapor Pressure Deficit (hPa)'}
-
 # Function options
 function_options_perc = [{'label': 'Mean', 'value': 'pmean'},
                          {'label': 'Maximum', 'value': 'pmax'},
@@ -309,74 +203,16 @@ function_names = {'pmean': 'Average Percentiles',
                   'pcorr': "Pearson's Correlation ",
                   'ocorr': "Pearson's Correlation "}
 
-# Acronym "options"
-ams = [{'label': 'PDSI: The Palmer Drought Severity Index (WWDT)', 'value': 0},
-       {'label': 'PDSI-Self Calibrated: The Self-Calibrating Palmer Drought ' +
-                 'Severity Index (WWDT)', 'value': 1},
-       {'label': 'Palmer Z Index: The Palmer Z Index (WWDT)', 'value': 2},
-       {'label': 'SPI: The Standardized Precipitation Index - 1 to 12 ' +
-                 'months (WWDT)', 'value': 3},
-       {'label': 'SPEI: The Standardized Precipitation-Evapotranspiration ' +
-                 'Index - 1 to 12 months (WWDT)', 'value': 4},
-       {'label': 'EDDI: The Evaporative Demand Drought Index - 1 to 12 ' +
-                 'months (PSD)', 'value': 5},
-       {'label': 'LERI: The Landscape Evaporative Response Index - 1 or 3 ' +
-                 'months (PSD)', 'value': 6},
-       {'label': 'TMIN: Average Daily Minimum Temperature ' +
-                 '(°C)(PRISM)', 'value': 7},
-       {'label': 'TMAX: Average Daily Maximum Temperature ' +
-                 '(°C)(PRISM)', 'value': 9},
-       {'label': 'TMEAN: Mean Temperature (°C)(PRISM)', 'value': 11},
-       {'label': 'TDMEAN: Mean Dew Point Temperature ' +
-                 '(°C)(PRISM)', 'value': 14},
-       {'label': 'PPT: Average Precipitation (mm)(PRISM)', 'value': 15},
-       {'label': 'VPDMAX: Maximum Vapor Pressure Deficit ' +
-                 '(hPa)(PRISM)', 'value': 18},
-       {'label': 'VPDMIN: Minimum Vapor Pressure Deficit ' +
-                 '(hPa)(PRISM)', 'value': 20}]
-
-acronym_text = ("""
-    INDEX/INDICATOR ACRONYMS
-    
-    
-    PDSI:            Palmer Drought Severity Index
-    
-    PDSI-SC:         Self-Calibrating PDSI
-    
-    Palmer Z Index:  Palmer Z Index
-    
-    SPI:             Standardized Precipitation Index
-    
-    SPEI:            Standardized Precip-ET Index
-    
-    EDDI:            Evaporative Demand Drought Index
-    
-    LERI:            Landscape Evaporation Response Index
-    
-    TMIN:            Average Daily Minimum Temp (°C)
-    
-    TMAX:            Average Daily Maximum Temp (°C)
-    
-    TMEAN:           Mean Temperature (°C)
-    
-    TDMEAN:          Mean Dew Point Temperature (°C)
-    
-    PPT:             Average Precipitation (mm)
-    
-    VPDMAX:          Max Vapor Pressure Deficit (hPa)
-    
-    VPDMIN:          Min Vapor Pressure Deficit (hPa)
-    """)
 
 # County data frame and options
-counties_df = pd.read_csv('data/tables/unique_counties.csv')
+counties_df = pd.read_csv(DP.join("tables/unique_counties.csv"))
 rows = [r for idx, r in counties_df.iterrows()]
 county_options = [{'label': r['place'], 'value': r['fips']} for r in rows]
 fips_pos = {county_options[i]['value']: i for i in range(len(county_options))}
 label_pos = {county_options[i]['label']: i for i in range(len(county_options))}
 
 # State options
-states_df = pd.read_table('data/tables/state_fips.txt', sep='|')
+states_df = pd.read_table(DP.join("tables", "state_fips.txt"), sep='|')
 states_df = states_df.sort_values('STUSAB')
 nconus = ['AK', 'AS', 'DC', 'GU', 'HI', 'MP', 'PR', 'UM', 'VI']
 states_df = states_df[~states_df.STUSAB.isin(nconus)]
@@ -408,7 +244,7 @@ RdWhBu = [[0.00, 'rgb(115,0,0)'], [0.10, 'rgb(230,0,0)'],
           [0.90, 'rgb(10,55,166)'], [1.00, 'rgb(5,16,110)']]
 
 # Get spatial dimensions from the sample data set above
-admin = Admin_Elements(resolution)
+admin = Admin_Elements(RES, DP.data_path)
 [state_array, county_array, grid, mask,
  source, albers_source, crdict, admin_df] = admin.getElements()  # <----------- remove albers source here (carefully)
 
@@ -502,7 +338,7 @@ def divMaker(id_num, index='noaa'):
                                  style=tablet_style,
                                  selected_style=tablet_style)),
               dcc.Dropdown(id='choice_{}'.format(id_num),
-                           options=indices,
+                           options=INDICES,
                            value=index,
                            clearable=False)],
               style={'width': '25%', 'float': 'left'},
@@ -710,7 +546,7 @@ navbar = html.Nav(
         html.Button(
           children="ACRONYMS (HOVER)",
           type='button',
-          title=acronym_text,
+          title=ACRONYM_TEXT,
           style={'height': '45px',
                  'padding': '9px',
                  'background-color': '#cfb87c',
@@ -1081,7 +917,7 @@ def toggleDescription(click):
         button_children = "Description: Off"
 
     else:
-        desc_children = open('data/tables/description.txt').read()  # <-------- It makes no sense that the description doc is in the tables folder
+        desc_children = open(DP.join("tables/description.txt")).read()  # <-------- It makes no sense that the description doc is in the tables folder
         style = on_button_style
         button_children = "Description: On"
 
@@ -1119,7 +955,8 @@ def retrieveData(signal, function, choice, location):
     choice_type = choice_types[function]
 
     # Retrieve data package
-    data = Index_Maps(choice, choice_type, time_data, colorscale)
+    data = Index_Maps(DP.data_path, choice, choice_type, time_data, colorscale,
+                      RES)
 
     # Set mask (also sets coordinate dictionary)
     data.setMask(location, crdict)
@@ -1466,8 +1303,8 @@ for i in range(1, 3):
                             content = archive.read(fname)
                             name, ext = os.path.splitext(fname)
                             fname = 'temp' + ext
-                            fdir = 'data/shapefiles/temp/'
-                            with open(fdir + fname, 'wb') as f:
+                            fpath = DP.join("shapefiles", "temp", fname)
+                            with open(fpath, 'wb') as f:
                                 f.write(content)
 
             elif len(filenames) > 1:
@@ -1478,12 +1315,12 @@ for i in range(1, 3):
                     fname = filenames[i]
                     name, ext = os.path.splitext(fname)
                     fname = 'temp' + ext
-                    fname = os.path.join('data', 'shapefiles', 'temp', fname)
-                    with open(fname, 'wb') as f:
+                    fpath = DP.join('shapefiles', 'temp', fname)
+                    with open(fpath, 'wb') as f:
                         f.write(decoded)
 
             # Now let's just rasterize it for a mask
-            shp = gpd.read_file('data/shapefiles/temp/temp.shp')
+            shp = gpd.read_file(DP.join("shapefiles/temp/temp.shp"))
 
             # Check CRS, reproject if needed
             crs = shp.crs
@@ -1491,7 +1328,7 @@ for i in range(1, 3):
                 epsg = crs['init']
                 epsg = int(epsg[epsg.index(':') + 1:])
             except:
-                fshp = fiona.open('data/shapefiles/temp/temp.shp')
+                fshp = fiona.open(DP.join("shapefiles/temp/temp.shp"))
                 crs_wkt = fshp.crs_wkt
                 crs_ref = osr.SpatialReference()
                 crs_ref.ImportFromWkt(crs_wkt)
@@ -1501,8 +1338,8 @@ for i in range(1, 3):
                 fshp.close()
 
             if epsg != 4326:
-                shapeReproject(src='data/shapefiles/temp/temp.shp',
-                               dst='data/shapefiles/temp/temp.shp',
+                shapeReproject(src=DP.join("shapefiles/temp/temp.shp"),
+                               dst=DP.join("shapefiles/temp/temp.shp"),
                                src_epsg=epsg, dst_epsg=4326)
 
             # Find a column that is numeric
@@ -1510,13 +1347,13 @@ for i in range(1, 3):
             attr = shp.columns[0]
 
             # Rasterize
-            src = 'data/shapefiles/temp/temp.shp'
-            dst = 'data/shapefiles/temp/temp1.tif'
+            src = DP.join("shapefiles/temp/temp.shp")
+            dst = DP.join("shapefiles/temp/temp1.tif")
             admin.rasterize(src, dst, attribute=attr, all_touch=False)  # <---- All touch not working.
 
             # Cut to extent
-            tif = gdal.Translate('data/shapefiles/temp/temp.tif',
-                                 'data/shapefiles/temp/temp1.tif',
+            tif = gdal.Translate(DP.join("shapefiles/temp/temp.tif"),
+                                 DP.join("shapefiles/temp/temp1.tif"),
                                  projWin=[-130, 50, -55, 20])
             tif = None
 
@@ -1836,8 +1673,6 @@ for i in range(1, 3):
         amin = np.nanmin(array)
 
         # Now, we want to use the same value range for colors for both maps
-        nonindices = ['tdmean', 'tmean', 'tmin', 'tmax', 'ppt',  'vpdmax',
-                      'vpdmin', 'vpdmean']
         if function == 'pmean':
             # Get the data for the other panel for its value range
             data2 = retrieveData(signal, function, choice2, location)
@@ -1850,7 +1685,7 @@ for i in range(1, 3):
         elif 'min' in function or 'max' in function:
             amax = amax
             amin = amin
-        elif choice in nonindices:
+        elif choice in NONINDICES:
             amax = amax
             amin = amin
         else:
@@ -1878,13 +1713,13 @@ for i in range(1, 3):
             amax = 1
             if type(gridid) is np.ndarray:
                 grids = [np.nanmin(gridid), np.nanmax(gridid)]
-                title = (indexnames[choice] + '<br>' +
+                title = (TITLE_MAP[choice] + '<br>' +
                          function_names[function] + 'With Grids ' +
                          str(int(grids[0]))  + ' to ' + str(int(grids[1])) +
                          '  ('  + date_print + ')')
                 title_size = 15
             else:
-                title = (indexnames[choice] + '<br>' +
+                title = (TITLE_MAP[choice] + '<br>' +
                          function_names[function] + 'With Grid ' +
                          str(int(gridid))  + '  ('  + date_print + ')')
 
@@ -1892,7 +1727,7 @@ for i in range(1, 3):
             array = data.getCorr(location, crdict)  # <------------------------ Expected memory spike
             title_size = 20
         else:
-            title = (indexnames[choice] + '<br>' + function_names[function] +
+            title = (TITLE_MAP[choice] + '<br>' + function_names[function] +
                      ': ' + date_print)
             title_size = 20
 
@@ -2062,9 +1897,7 @@ for i in range(1, 3):
 
         # If the function is oarea, we plot five overlapping timeseries
         label = location[3]
-        nonindices = ['tdmean', 'tmean', 'tmin', 'tmax', 'ppt',  'vpdmax',
-                      'vpdmin', 'vpdmean']
-        if function != 'oarea' or choice in nonindices:
+        if function != 'oarea' or choice in NONINDICES:
             # Get the time series from the data object
             timeseries = data.getSeries(location, crdict)
 
@@ -2073,7 +1906,7 @@ for i in range(1, 3):
                                    'value': list(timeseries),
                                    'function': function_names[function],  # <-- This doesn't always make sense
                                    'location': location[-2],
-                                   'index': indexnames[choice],
+                                   'index': TITLE_MAP[choice],
                                    'coord_extent': str(crds)})
             df = pd.DataFrame(columns)
             df_str = df.to_csv(encoding='utf-8', index=False)
@@ -2081,7 +1914,7 @@ for i in range(1, 3):
             bar_type = 'bar'
             area_store = ['', '']
 
-            if choice in nonindices and function == 'oarea':
+            if choice in NONINDICES and function == 'oarea':
                 label = '(Drought Severity Categories Not Available)'
 
         else:
@@ -2109,13 +1942,13 @@ for i in range(1, 3):
                                    'function': 'Percent Area',
                                    'location':  label,
                                    'coord_extent': str(crds),
-                                   'index': indexnames[choice]})
+                                   'index': TITLE_MAP[choice]})
             df = pd.DataFrame(columns)
             df_str = df.to_csv(encoding='utf-8', index=False)
             href = "data:text/csv;charset=utf-8," + urllib.parse.quote(df_str)
 
         # Set up y-axis depending on selection
-        if function != 'oarea' or choice in nonindices:
+        if function != 'oarea' or choice in NONINDICES:
             if 'p' in function:
                 yaxis = dict(title='Percentiles', range=[0, 100])
             elif 'o' in function:
@@ -2138,14 +1971,14 @@ for i in range(1, 3):
                 dmax = 100
 
         # The drought area graphs have there own configuration
-        elif function == 'oarea' and choice not in nonindices:
+        elif function == 'oarea' and choice not in NONINDICES:
             yaxis = dict(title='Percent Area (%)',
                          range=[0, 100],
                          # family='Time New Roman',
                          hovermode='y')
 
         # Build the plotly readable dictionaries (Two types)
-        if function != 'oarea' or choice in nonindices:
+        if function != 'oarea' or choice in NONINDICES:
             data = [dict(type='bar',
                          x=dates,
                          y=timeseries,
@@ -2192,7 +2025,7 @@ for i in range(1, 3):
         if label is None:
             label = 'Existing Shapefile'
         layout_copy = copy.deepcopy(layout)
-        layout_copy['title'] = indexnames[choice] + "<Br>" + label
+        layout_copy['title'] = TITLE_MAP[choice] + "<Br>" + label
         layout_copy['plot_bgcolor'] = "white"
         layout_copy['paper_bgcolor'] = "white"
         layout_copy['height'] = 300
@@ -2200,7 +2033,7 @@ for i in range(1, 3):
         layout_copy['font'] = dict(family='Time New Roman')
         if function == 'oarea':
             if type(location[0]) is int:
-                layout_copy['title'] = (indexnames[choice] +
+                layout_copy['title'] = (TITLE_MAP[choice] +
                                         '<Br>' + 'Contiguous US ' +
                                         '(point estimates not available)')
             layout_copy['xaxis'] = dict(type='date',

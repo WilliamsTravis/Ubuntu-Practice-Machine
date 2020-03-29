@@ -65,13 +65,14 @@ from urllib.error import HTTPError, URLError
 import urllib
 import xarray as xr
 
+from drip import toNetCDF, toNetCDFAlbers, toNetCDFPercentile
+
 # Refactor all of this
-pwd = str(pathlib.Path(__file__).parent.absolute())
-data_path = os.path.join(pwd, "..")
-sys.path.insert(0, data_path)
+pwd = str(pathlib.Path('__file__').parent.absolute())
+proj_dir = os.path.split(pwd)[0]
+data_path = os.path.join(pwd, "")
 
 # Create a package out of functions
-from functions import toNetCDF, toNetCDFAlbers, toNetCDFPercentile
 gdal.PushErrorHandler('CPLQuietErrorHandler')
 os.environ['GDAL_PAM_ENABLED'] = 'NO'
 
@@ -79,7 +80,7 @@ os.environ['GDAL_PAM_ENABLED'] = 'NO'
 try:
     res = float(sys.argv[1])
 except:
-    res = 0.25
+    res = 0.125
 
 # In[] Set up paths and urls
 wwdt_url = 'https://wrcc.dri.edu/wwdt/data/PRISM'
