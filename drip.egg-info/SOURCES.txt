@@ -1,7 +1,10 @@
 README.md
 setup.py
 drip/__init__.py
+drip/constants.py
+drip/data.py
 drip/functions.py
+drip/gdalmethods.py
 drip.egg-info/PKG-INFO
 drip.egg-info/SOURCES.txt
 drip.egg-info/dependency_links.txt

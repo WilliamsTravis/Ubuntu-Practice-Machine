@@ -72,7 +72,6 @@ import gc
 import json
 import os
 import psutil
-import sys
 import tempfile
 import warnings
 
@@ -94,17 +93,17 @@ from dash.exceptions import PreventUpdate
 from flask_caching import Cache
 from osgeo import gdal, osr
 
-from drip import Admin_Elements, Index_Maps, Location_Builder
+from drip import Admin_Elements, Index_Maps, Location_Builder, print_assign
 from drip.data import Data_Path, shapeReproject
 from drip.constants import ACRONYM_TEXT, TITLE_MAP, INDICES, NONINDICES
 from drip.constants import PROJECT_DIR, UNIT_MAP
 
+
 # What to do with the mean of empty slice warning?
 warnings.filterwarnings("ignore")
 
-
 # Get resolution from file call
-RES = 0.25
+RES = 0.125
 RES_STRING = str(RES).replace(".", "_")
 
 # Data and Index Paths
@@ -112,7 +111,6 @@ DP = Data_Path(PROJECT_DIR, "data")
 IP = Data_Path(PROJECT_DIR,  "data", "droughtindices", RES_STRING)
 
 # In[] Default Values
-
 # Get time dimensions from the first data set, assuming netcdfs are uniform
 sample_path = IP.join("netcdfs", "spi1.nc")
 
@@ -202,7 +200,6 @@ function_names = {'pmean': 'Average Percentiles',
                   'oarea': 'Average Index Values',
                   'pcorr': "Pearson's Correlation ",
                   'ocorr': "Pearson's Correlation "}
-
 
 # County data frame and options
 counties_df = pd.read_csv(DP.join("tables/unique_counties.csv"))
@@ -813,6 +810,58 @@ app.layout = html.Div([navbar, body])
 
 # In[]: App Callbacks
 # For singular elements
+
+@cache.memoize()
+def retrieveData(signal, function, choice, location):
+    '''
+    This takes the user defined signal and uses the Index_Map class to filter'
+    by the selected dates and return the singular map, the 3d timeseries array,
+    and the colorscale.
+
+    sample arguments:
+        signal = [[[2000, 2017], [1, 12], [ 4, 5, 6, 7]], 'Viridis', 'no']
+        choice = 'pdsi'
+        function = 'pmean'
+        location = ["all", "y", "x", "Contiguous United States", 0]
+        choice_type = 'percentile'
+    '''
+
+
+    # Retrieve signal elements
+    time_data = signal[0]
+    colorscale = signal[1]
+
+    # Determine the choice_type based on function
+    choice_types = {'omean': 'original',
+                    'omin': 'original',
+                    'omax': 'original',
+                    'pmean': 'percentile',
+                    'pmin': 'percentile',
+                    'pmax': 'percentile',
+                    'oarea': 'area',
+                    'ocorr': 'correlation_o',
+                    'pcorr': 'correlation_p'}
+    choice_type = choice_types[function]
+
+    # Troubleshooting
+    # print("\n")
+    # print_assign("signal", signal)
+    # print_assign("choice", choice)
+    # print_assign("function", function)
+    # print_assign("location", location)
+    # print_assign("choice_type", choice_type)
+    # print("\n")
+
+    # Retrieve data package
+    data = Index_Maps(DP.data_path, choice, choice_type, time_data, colorscale,
+                      RES)
+
+    # Set mask (also sets coordinate dictionary)
+    data.setMask(location, crdict)
+
+    return data
+
+
 @app.callback([Output('date_range', 'children'),
                Output('date_print', 'children'),
                Output('date_range2', 'children'),
@@ -923,45 +972,6 @@ def toggleDescription(click):
 
     return desc_children, style, button_children
 
-
-@cache.memoize()
-def retrieveData(signal, function, choice, location):
-    '''
-    This takes the user defined signal and uses the Index_Map class to filter'
-    by the selected dates and return the singular map, the 3d timeseries array,
-    and the colorscale.
-
-    sample arguments:
-        signal = [[[2000, 2017], [1, 12], [ 4, 5, 6, 7]], 'Viridis', 'no']
-        choice = 'pdsi'
-        function = 'omean'
-        location = ["all", "y", "x", "Contiguous United States", 0]
-    '''
-
-    # Retrieve signal elements
-    time_data = signal[0]
-    colorscale = signal[1]
-
-    # Determine the choice_type based on function
-    choice_types = {'omean': 'original',
-                    'omin': 'original',
-                    'omax': 'original',
-                    'pmean': 'percentile',
-                    'pmin': 'percentile',
-                    'pmax': 'percentile',
-                    'oarea': 'area',
-                    'ocorr': 'correlation_o',
-                    'pcorr': 'correlation_p'}
-    choice_type = choice_types[function]
-
-    # Retrieve data package
-    data = Index_Maps(DP.data_path, choice, choice_type, time_data, colorscale,
-                      RES)
-
-    # Set mask (also sets coordinate dictionary)
-    data.setMask(location, crdict)
-
-    return data
 
 
 # Output list of all index choices for syncing
@@ -1159,12 +1169,12 @@ for i in range(1, 3):
                 triggered_value['points']  = tv
 
             # print out variables for developing
-            print("key = " + json.dumps(key))
-            print("sync = " + json.dumps(sync))
-            print("locations = " + str(locations))
-            print("updates = " + str(updates))
-            print("triggered_value = " + str(triggered_value))
-            print("trigger = " + json.dumps(trigger))
+            # print("key = " + json.dumps(key))
+            # print("sync = " + json.dumps(sync))
+            # print("locations = " + str(locations))
+            # print("updates = " + str(updates))
+            # print("triggered_value = " + str(triggered_value))
+            # print("trigger = " + json.dumps(trigger))
 
             # Two cases, if syncing return a copy, if not split
             if 'On' in sync:
@@ -1595,13 +1605,13 @@ for i in range(1, 3):
         location =  '[["all", "y", "x", "Contiguous United States", 0], 9]'
         key = '1'
         signal = '[[[2000, 2017], [1990, 2000], [1, 12], [5, 6, 7, 8]], "Viridis", "no"]'
-        choice1 = 'pdsi'
-        choice2 = 'spi4'
+        choice1 = 'spei6'
+        choice2 = 'spi1'
         function = 'omean'
         date_print = '2000 - 2019'
         year_sync = 'On'
         '''
-        print("SIGNAL: " + signal)
+        # print("SIGNAL: " + signal)
         # Temporary, split location up
         location = json.loads(location)
         location, crds = location
@@ -1611,7 +1621,7 @@ for i in range(1, 3):
             map_extent = default_extent
         elif 'mapbox.center' not in map_extent.keys():
             map_extent = default_extent
-        print(str(map_extent))
+        # print(str(map_extent))
 
         # Identify element number
         key = int(key)
@@ -1695,7 +1705,7 @@ for i in range(1, 3):
 
         # Filter for state filters
         flag, y, x, label, idx = location
-        print('FLAG:' + flag)
+        # print('FLAG:' + flag)
         if flag == 'state' or flag == 'county':
             array = array * data.mask
         elif flag == 'shape':
@@ -1772,24 +1782,25 @@ for i in range(1, 3):
                               cmax=amax,
                               cmin=amin,
                               opacity=1.0,
-                              size=source.res[0] * 20,
+                              size=source.res[0] * 40,
                               colorbar=dict(textposition="auto",
                                             orientation="h",
                                             font=dict(size=15,
                                                       fontweight='bold'))))
 
         # Add an outline to help see when zoomed in
-        d2 = dict(type='scattermapbox',
-                  lon=df['lonbin'],
-                  lat=df['latbin'],
-                  mode='markers',
-                  hovermode='closest',
-                  showlegend=False,
-                  marker=dict(color='#000000',
-                              size=source.res[0] * 20 + .5))
+        # d2 = dict(type='scattermapbox',
+        #           lon=df['lonbin'],
+        #           lat=df['latbin'],
+        #           mode='markers',
+        #           hovermode='closest',
+        #           showlegend=False,
+        #           marker=dict(color='#000000',
+        #                       size=source.res[0] * 40 + .5))
 
         # package these in a list
-        data = [d2, d1]
+        # data = [d2, d1]
+        data = [d1]
 
         # Set up layout
         layout_copy = copy.deepcopy(layout)
@@ -1834,14 +1845,27 @@ for i in range(1, 3):
                    State('area_store_{}'.format(i), 'children')])
     def makeSeries(submit, signal, choice, choice_store, location, show_dsci,
                    key, sync, year_sync, function, area_store):
-        '''
-        This makes the time series graph below the map.
+        """This makes the time series graph below the map.
+
         Sample arguments:
             signal = [[[2000, 2017], [1, 12], [5, 6, 7, 8]], 'Viridis', 'no']
             choice = 'pdsi'
             function = 'oarea'
             location =  ['all', 'y', 'x', 'Contiguous United States', 0]
-        '''
+        """
+        print("\n")
+        print_assign("submit", submit)
+        print_assign("signal", signal)
+        print_assign("choice", choice)
+        print_assign("choice_store", choice_store)
+        print_assign("location", location)
+        print_assign("show_dsci", show_dsci)
+        print_assign("key", key)
+        print_assign("sync", sync)
+        print_assign("year_sync", year_sync)
+        print_assign("function", function)
+        print_assign("area_store", area_store)
+        print("\n")
 
         # Temporary, split location up
         location = json.loads(location)
@@ -1898,6 +1922,7 @@ for i in range(1, 3):
         # If the function is oarea, we plot five overlapping timeseries
         label = location[3]
         if function != 'oarea' or choice in NONINDICES:
+
             # Get the time series from the data object
             timeseries = data.getSeries(location, crdict)
 
@@ -1919,13 +1944,13 @@ for i in range(1, 3):
 
         else:
             bar_type = 'overlay'
-            label = location[3]
 
             # I cannot get this thing to cache! We are storing it in a Div
             if area_store_key == area_store[0]:
                 ts_series, ts_series_ninc, dsci = area_store[1]
             else:
-                ts_series, ts_series_ninc, dsci = data.getArea(crdict)
+                ts_series, ts_series_ninc, dsci = data.getArea(DP.data_path,
+                                                               crdict, RES)
 
             # This needs to be returned either way
             series = [ts_series, ts_series_ninc, dsci]

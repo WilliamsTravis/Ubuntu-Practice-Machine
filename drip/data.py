@@ -11,16 +11,19 @@ import datetime as dt
 import numpy as np
 import os
 import pandas as pd
+import salem
 import xarray as xr
 
 from collections import OrderedDict
 from glob import glob
 from netCDF4 import Dataset
 from osgeo import gdal, osr, ogr
+from pyproj import Proj
 from scipy.stats import rankdata
 from tqdm import tqdm
 
 from drip.constants import TITLE_MAP
+
 
 class Data_Path:
     """Data_Path joins a root directory path to data file paths."""
@@ -293,6 +296,7 @@ def wgs_netcdf(arrays, dst, proj, template, epsg=4326, wmode='w'):
     # For attributes
     todays_date = dt.datetime.today()
     today = np.datetime64(todays_date)
+    todays_number = (todays_date - dt.datetime(1900, 1, 1)).days
     index = os.path.splitext(os.path.basename(dst))[0]
 
     # Create data set
@@ -304,6 +308,15 @@ def wgs_netcdf(arrays, dst, proj, template, epsg=4326, wmode='w'):
     days = temp.variables['day'][:].data
     days = [pd.Timestamp(d).to_pydatetime() for d in days]
     days = [(d - base).days for d in days]
+
+    # Check for erroneous entires
+    day_errors = [d for d in days if d > todays_number]
+
+    # Fix errors
+    if day_errors:
+        idx = days.index(min(day_errors))
+        days = np.array(days)[: idx]
+        arrays = arrays[: idx]
 
     # Read raster for the structure
     data = gdal.Open(template)
@@ -384,6 +397,7 @@ def albers_netcdf(arrays, dst,  proj,template, epsg=102008, wmode='w'):
     # For attributes
     todays_date = dt.datetime.today()
     today = np.datetime64(todays_date)
+    todays_number = (todays_date - dt.datetime(1900, 1, 1)).days
     index = os.path.splitext(os.path.basename(dst))[0]
 
     # Create data set
@@ -395,6 +409,15 @@ def albers_netcdf(arrays, dst,  proj,template, epsg=102008, wmode='w'):
     days = temp.variables['day'][:].data
     days = [pd.Timestamp(d).to_pydatetime() for d in days]
     days = [(d - base).days for d in days]
+
+    # Check for erroneous entires
+    day_errors = [d for d in days if d > todays_number]
+
+    # Fix errors
+    if day_errors:
+        idx = days.index(min(day_errors))
+        days = np.array(days)[: idx]
+        arrays = arrays[: idx]
 
     # Read raster for the structure
     data = gdal.Open(template)
@@ -1105,12 +1128,12 @@ def toRasters(arraylist, path, geometry, srs):
         image.GetRasterBand(1).WriteArray(ray[1])
 
 
-def wgsToAlbers(arrays, crdict, proj_sample):
-    '''
-    Takes an xarray dataset in WGS 84 (epsg: 4326) with a specified mask and
+def wgsToAlbers(masked_arrays, crdict, proj_sample):
+    """Takes an numpy dataset in WGS 84 (epsg: 4326) with a specified mask and
     returns that mask projected to Alber's North American Equal Area Conic
     (epsg: 102008).
-    '''
+    """
+
     # dates = range(len(arrays.time))
     wgs_proj = Proj(init='epsg:4326')
     geom = crdict.source.transform
@@ -1120,7 +1143,7 @@ def wgsToAlbers(arrays, crdict, proj_sample):
     lats = np.unique(wgrid.xy_coordinates[1])
     lats = lats[::-1]
     lons = np.unique(wgrid.xy_coordinates[0])
-    data_array = xr.DataArray(data=arrays.value[0],
+    data_array = xr.DataArray(data=masked_arrays[0],
                               coords=[lats, lons],
                               dims=['lat', 'lon'])
     wgs_data = xr.Dataset(data_vars={'value': data_array})
@@ -1155,7 +1178,6 @@ def wgsToAlbers(arrays, crdict, proj_sample):
     nlat, nlon = proj_mask.shape
     xs = np.arange(nlon) * geom[1] + geom[0]
     ys = np.arange(nlat) * geom[5] + geom[3]
-
 
     # Create mask xarray
     proj_mask = xr.DataArray(proj_mask,

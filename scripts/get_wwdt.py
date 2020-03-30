@@ -129,6 +129,7 @@ def create_data(index):
     arrays = ds.ReadAsArray()
     proj84 = ds.GetProjection()
     wgs_netcdf(arrays, dst, proj84, template=temp_file)
+    del ds
 
     # Now let's create the percentile set
     arrays[arrays == -9999.] = np.nan
@@ -216,10 +217,10 @@ def check_dates(nc_path, wwdt_index_url):
     t1 = dates[0]
     t2 = dates[-1]
     this_year = TODAYS_DATE.year
-    last_month = (TODAYS_DATE - dt.timedelta(weeks=4)).month
+    last_month = (TODAYS_DATE - dt.timedelta(weeks=4)).month - 1
     if t2.year == this_year and t2.month == last_month:
         print('No missing files, moving on...\n')
-        return
+        return []
     else:
         # Get a list of the dates already in the netcdf file
         existing_dates = pd.date_range(t1, t2, freq='MS')
@@ -264,6 +265,30 @@ def remote_local_paths(index):
         paths[target_url] = local_path
 
     return paths
+
+
+def check_future(index):
+    """If a future date got in there some how."""
+
+    nc_path = IP.join("netcdfs", index + '.nc')
+    today_number = (TODAYS_DATE - dt.datetime(1900, 1, 1)).days
+    future_dates = []
+    with Dataset(nc_path) as ds:
+        for date in ds["time"][:]:
+            if date > today_number:
+                future_dates.append(date)
+
+    if future_dates:
+        minf = np.min(future_dates)
+        ds = Dataset(nc_path, "r+")
+        time = ds["time"][:]
+        idx = int(np.where(time == minf)[0]) - 1
+        new_time = ds["time"][:idx]
+        new_value = ds["value"][:idx]
+        
+        ds.variables["time"][:] = new_time
+        ds.variables["value"][:] = new_value
+        ds.close()            
 
 
 def update_data(index):

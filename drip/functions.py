@@ -89,6 +89,15 @@ def outLine(color, width):
 
 
 
+def print_assign(name, variable):
+    """This will print a variable assignment from the application scope to
+    help with troubleshooting."""
+
+    if isinstance(variable, str):
+        variable = "'" + variable + "'"
+    print("{} = {}".format(name, variable))
+    
+
 class Admin_Elements:
 
     def __init__(self, resolution, data_path):
@@ -592,49 +601,54 @@ class Index_Maps:
                    'Picnic': 'Picnic', 'Portland': 'Portland',
                    'Rainbow': 'Rainbow', 'RdBu': 'RdBu', 'Viridis': 'Viridis',
                    'Reds': 'Reds',
-                   'RdWhBu': [[0.00, 'rgb(115,0,0)'],
-                              [0.10, 'rgb(230,0,0)'],
-                              [0.20, 'rgb(255,170,0)'],
-                              [0.30, 'rgb(252,211,127)'],
-                              [0.40, 'rgb(255, 255, 0)'],
-                              [0.45, 'rgb(255, 255, 255)'],
-                              [0.55, 'rgb(255, 255, 255)'],
-                              [0.60, 'rgb(143, 238, 252)'],
-                              [0.70, 'rgb(12,164,235)'],
-                              [0.80, 'rgb(0,125,255)'],
-                              [0.90, 'rgb(10,55,166)'],
-                              [1.00, 'rgb(5,16,110)']],
-                   'RdWhBu (Extreme Scale)':  [[0.00, 'rgb(115,0,0)'],
-                                               [0.02, 'rgb(230,0,0)'],
-                                               [0.05, 'rgb(255,170,0)'],
-                                               [0.10, 'rgb(252,211,127)'],
-                                               [0.20, 'rgb(255, 255, 0)'],
-                                               [0.30, 'rgb(255, 255, 255)'],
-                                               [0.70, 'rgb(255, 255, 255)'],
-                                               [0.80, 'rgb(143, 238, 252)'],
-                                               [0.90, 'rgb(12,164,235)'],
-                                               [0.95, 'rgb(0,125,255)'],
-                                               [0.98, 'rgb(10,55,166)'],
-                                               [1.00, 'rgb(5,16,110)']],
-                   'RdYlGnBu':  [[0.00, 'rgb(124, 36, 36)'],
-                                 [0.25, 'rgb(255, 255, 48)'],
-                                 [0.5, 'rgb(76, 145, 33)'],
-                                 [0.85, 'rgb(0, 92, 221)'],
-                                 [1.00, 'rgb(0, 46, 110)']],
-                   'BrGn':  [[0.00, 'rgb(91, 74, 35)'],
-                             [0.10, 'rgb(122, 99, 47)'],
-                             [0.15, 'rgb(155, 129, 69)'],
-                             [0.25, 'rgb(178, 150, 87)'],
-                             [0.30, 'rgb(223,193,124)'],
-                             [0.40, 'rgb(237, 208, 142)'],
-                             [0.45, 'rgb(245,245,245)'],
-                             [0.55, 'rgb(245,245,245)'],
-                             [0.60, 'rgb(198,234,229)'],
-                             [0.70, 'rgb(127,204,192)'],
-                             [0.75, 'rgb(62, 165, 157)'],
-                             [0.85, 'rgb(52,150,142)'],
-                             [0.90, 'rgb(1,102,94)'],
-                             [1.00, 'rgb(0, 73, 68)']]}
+                   'RdWhBu': [
+                       [0.00, 'rgb(115,0,0)'],
+                       [0.10, 'rgb(230,0,0)'],
+                       [0.20, 'rgb(255,170,0)'],
+                       [0.30, 'rgb(252,211,127)'],
+                       [0.40, 'rgb(255, 255, 0)'],
+                       [0.45, 'rgb(255, 255, 255)'],
+                       [0.55, 'rgb(255, 255, 255)'],
+                       [0.60, 'rgb(143, 238, 252)'],
+                       [0.70, 'rgb(12,164,235)'],
+                       [0.80, 'rgb(0,125,255)'],
+                       [0.90, 'rgb(10,55,166)'],
+                       [1.00, 'rgb(5,16,110)']],
+                   'RdWhBu (Extreme Scale)':  [
+                       [0.00, 'rgb(115,0,0)'],
+                       [0.02, 'rgb(230,0,0)'],
+                       [0.05, 'rgb(255,170,0)'],
+                       [0.10, 'rgb(252,211,127)'],
+                       [0.20, 'rgb(255, 255, 0)'],
+                       [0.30, 'rgb(255, 255, 255)'],
+                       [0.70, 'rgb(255, 255, 255)'],
+                       [0.80, 'rgb(143, 238, 252)'],
+                       [0.90, 'rgb(12,164,235)'],
+                       [0.95, 'rgb(0,125,255)'],
+                       [0.98, 'rgb(10,55,166)'],
+                       [1.00, 'rgb(5,16,110)']],
+                   'RdYlGnBu':  [
+                       [0.00, 'rgb(124, 36, 36)'],
+                       [0.25, 'rgb(255, 255, 48)'],
+                       [0.5, 'rgb(76, 145, 33)'],
+                       [0.85, 'rgb(0, 92, 221)'],
+                       [1.00, 'rgb(0, 46, 110)']],
+                   'BrGn':  [
+                       [0.00, 'rgb(91, 74, 35)'],
+                       [0.10, 'rgb(122, 99, 47)'],
+                       [0.15, 'rgb(155, 129, 69)'],
+                       [0.25, 'rgb(178, 150, 87)'],
+                       [0.30, 'rgb(223,193,124)'],
+                       [0.40, 'rgb(237, 208, 142)'],
+                       [0.45, 'rgb(245,245,245)'],
+                       [0.55, 'rgb(245,245,245)'],
+                       [0.60, 'rgb(198,234,229)'],
+                       [0.70, 'rgb(127,204,192)'],
+                       [0.75, 'rgb(62, 165, 157)'],
+                       [0.85, 'rgb(52,150,142)'],
+                       [0.90, 'rgb(1,102,94)'],
+                       [1.00, 'rgb(0, 73, 68)']]
+                   }
 
         # Default color schemes
         defaults = {'percentile': options['RdWhBu'],
@@ -661,9 +675,9 @@ class Index_Maps:
         type_paths = {'original': nc_path,
                       'area': nc_path,
                       'correlation_o': nc_path,
-                      'correlation_p': self._paths("percentiles"),
-                      'percentile': self._paths("percentiles"),
-                      'projected': self._paths("albers")}
+                      'correlation_p': os.path.join(nc_path, "percentiles"),
+                      'percentile': os.path.join(nc_path, "percentiles"),
+                      'projected': os.path.join(nc_path, "albers")}
 
         # Build path and retrieve the data set
         netcdf_path = type_paths[self.choice_type]
@@ -673,19 +687,19 @@ class Index_Maps:
         else:
             dataset = xr.open_dataset(file_path)
 
-        dataset["value"] = dataset["value"].astype("float16")
+        dataset["value"] = dataset["value"]
 
         # Set this as an attribute for easy retrieval
         self.dataset = dataset
 
     def setMask(self, location, crdict):
-        '''
-        Take a location object and the coordinate dictionary to create an
+        """Take a location object and the coordinate dictionary to create an
         xarray for masking the dask datasets without pulling into memory.
 
         location = location from Location_Builder or 1d array
         crdict = coordinate dictionary
-        '''
+        """
+
         # Get x, y coordinates from location
         flag, y, x, label, idx = location
         mask = crdict.grid.copy()
@@ -706,13 +720,9 @@ class Index_Maps:
         lons = np.arange(nlon) * geom[1] + geom[0]
         lats = np.arange(nlat) * geom[5] + geom[3]
 
-
         # Create mask xarray
-        xmask = xr.DataArray(mask,
-                             coords={'lat': lats,
-                                     'lon': lons},
-                             dims={'lat': len(lats),
-                                   'lon': len(lons)})
+        xmask = xr.DataArray(mask, coords={"lat": lats, "lon": lons},
+                             dims={"lat": len(lats), "lon": len(lons)})
         self.mask = xmask
 
     def setReverse(self):
@@ -755,41 +765,39 @@ class Index_Maps:
         """
 
         # Get filtered dataset
-        data = self.dataset_interval
+        dataset = self.dataset_interval
 
         # Get the location coordinates
         flag, y, x, label, idx = location
 
         # Filter if needed and generate timeseries
         if flag == 'all':
-            timeseries = data.mean(dim=('lat', 'lon'), skipna=True)
+            timeseries = dataset.mean(dim=('lat', 'lon'), skipna=True)
             timeseries = timeseries.value.values
         else:
-            y = json.loads(y)
-            x = json.loads(x)
             if flag == 'grid':
-                timeseries = data.value[:, y, x].values
+                y = json.loads(y)
+                x = json.loads(x)
+                timeseries = dataset.value[:, y, x].values
             else:
-                # self.setMask(location, crdict)
-                data = data.where(self.mask == 1)
-                timeseries = data.mean(dim=('lat', 'lon'), skipna=True)
+                mdata = dataset.where(self.mask == 1)
+                timeseries = mdata.mean(dim=('lat', 'lon'), skipna=True)
                 timeseries = timeseries.value.values
 
-        # print("Area fitlering complete.")
         return timeseries
 
     def getCorr(self, location, crdict):
-        '''
-        Create a field of pearson's correlation coefficients with any one
+        """Create a field of pearson's correlation coefficients with any one
         selection.
-        '''
+        """
+
         ts = self.getSeries(location, crdict)
         arrays = self.dataset_interval.value.values
         one_field = correlationField(ts, arrays)
 
         return one_field
 
-    def getArea(self, crdict):
+    def getArea(self, data_path, crdict, resolution):
         """This will take in a time series of arrays and a drought severity
         category and mask out all cells with values above or below the category
         thresholds. If inclusive is 'True' it will only mask out all cells that
@@ -808,14 +816,17 @@ class Index_Maps:
         data = self.dataset_interval
 
         # Now read in the corrollary albers data set
-        time_data = self.getTime()
+        time_data = self.getTime()        
         choice_type = 'projected'
-        proj_data = Index_Maps(choice, choice_type, time_data, 'RdWhBu',
-                               chunk=True)
+        proj_data = Index_Maps(data_path, choice, choice_type, time_data, 'RdWhBu',
+                               resolution=resolution, chunk=True)
+        proj_sample = proj_data.dataset
 
         # Filter data by the mask (should be set already)
-        masked_arrays = data.where(self.mask == 1)
-        albers_mask = wgsToAlbers(masked_arrays, crdict, proj_data.dataset)
+        arrays = data.value.values
+        mask = self.mask.values
+        masked_arrays = arrays * mask
+        albers_mask = wgsToAlbers(masked_arrays, crdict, proj_sample)
         arrays = proj_data.dataset_interval.where(albers_mask == 1).value
 
         # Flip if this is EDDI

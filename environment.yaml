@@ -29,3 +29,4 @@ dependencies:
   - xarray==0.11.2
   - pip:
     - salem==0.2.3
+    - werkzeug==0.16.0
